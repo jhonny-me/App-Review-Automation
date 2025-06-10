@@ -1,0 +1,6 @@
+node_modules/
+*.p8
+*.xlsx
+.env
+cybexandroid-*.json
+examples/
