@@ -31,6 +31,7 @@ module.exports = {
     { header: "Rating", key: "rating", width: 8 },
     { header: "Title", key: "title", width: 25 },
     { header: "Review", key: "review", width: 50 },
+    { header: "Translated Review", key: "translatedReview", width: 50 },
     { header: "Country", key: "country", width: 12 },
     { header: "Developer Reply", key: "developerReply", width: 50 },
     { header: "Reply Date", key: "replyDate", width: 12 },
