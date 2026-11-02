@@ -9,6 +9,11 @@ class TranslationService {
   }
 
   async translate(text, targetLanguage = 'en') {
+    // translation is optional, reviews are exported as they are without credentials
+    if (!this.appId || !this.apiKey) {
+      return text;
+    }
+
     try {
       const salt = Date.now();
       const signStr = this.appId + text + salt + this.apiKey;

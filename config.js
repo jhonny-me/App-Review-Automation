@@ -5,8 +5,7 @@ function getConfig() {
   const requiredVars = [
     'IOS_ISSUER_ID', 'IOS_KEY_ID', 'IOS_PRIVATE_KEY_PATH',
     'IOS_APP_ID', 'ANDROID_PACKAGE_NAME',
-    'GOOGLE_CLIENT_EMAIL', 'GOOGLE_PRIVATE_KEY',
-    'TRANSLATION_API_KEY'
+    'GOOGLE_CLIENT_EMAIL', 'GOOGLE_PRIVATE_KEY'
   ];
 
   const missingVars = requiredVars.filter(varName => !process.env[varName]);
