@@ -33,8 +33,6 @@ class IosReviewService {
 
   _generateToken() {
     try {
-      // debug config
-      console.log("this.config: ", this.config);
       const privateKey = fs.readFileSync(this.config.privateKeyPath);
       const now = Math.floor(Date.now() / 1000);
       const expiresIn = 60 * 20; // 20 minutes (Apple's max)

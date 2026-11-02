@@ -1,0 +1,159 @@
+name: App Review Automation
+description: Fetch the latest App Store and Google Play reviews, translate them and export them to an Excel file.
+author: jhonny-me
+
+branding:
+  icon: message-square
+  color: blue
+
+inputs:
+  ios-issuer-id:
+    description: App Store Connect API issuer ID.
+    required: true
+  ios-key-id:
+    description: App Store Connect API key ID.
+    required: true
+  ios-private-key:
+    description: Contents of the App Store Connect API private key (the .p8 file). Pass it from a secret.
+    required: true
+  ios-app-id:
+    description: Apple ID of the iOS app.
+    required: true
+  ios-app-name:
+    description: Name of the iOS app.
+    required: false
+    default: ''
+  ios-max-results:
+    description: Maximum number of iOS reviews to fetch.
+    required: false
+    default: '20'
+  android-package-name:
+    description: Package name of the Android app, e.g. com.example.app.
+    required: true
+  google-client-email:
+    description: Client email of the Google service account with access to the Play Developer API.
+    required: true
+  google-private-key:
+    description: Private key of the Google service account (the `private_key` value of its JSON key). Pass it from a secret.
+    required: true
+  android-max-results:
+    description: Maximum number of Android reviews to fetch.
+    required: false
+    default: '20'
+  translation-app-id:
+    description: Baidu Translate app ID. Reviews are exported untranslated when no translation credentials are given.
+    required: false
+    default: ''
+  translation-api-key:
+    description: Baidu Translate secret key.
+    required: false
+    default: ''
+  output-file:
+    description: Path of the Excel file to write, relative to the workspace.
+    required: false
+    default: app_reviews.xlsx
+  upload-artifact:
+    description: Upload the Excel file as a workflow artifact. Artifacts of a public repository can be downloaded by anyone, set to false and use destination-url for review data you do not want to expose.
+    required: false
+    default: 'true'
+  artifact-name:
+    description: Name of the uploaded artifact.
+    required: false
+    default: app-reviews
+  artifact-retention-days:
+    description: Days to keep the artifact, 0 uses the repository default.
+    required: false
+    default: '7'
+  destination-url:
+    description: Optional private destination, the Excel file is sent to this URL with an HTTP request. Pass it from a secret.
+    required: false
+    default: ''
+  destination-method:
+    description: HTTP method used for destination-url.
+    required: false
+    default: PUT
+  destination-headers:
+    description: JSON object with extra request headers for destination-url, e.g. an Authorization header. Pass it from a secret.
+    required: false
+    default: ''
+  destination-field:
+    description: When set, the file is sent as multipart/form-data under this field name instead of as the raw request body.
+    required: false
+    default: ''
+
+outputs:
+  file-path:
+    description: Absolute path of the generated Excel file, usable by later steps.
+    value: ${{ steps.export.outputs.file-path }}
+  artifact-id:
+    description: ID of the uploaded artifact, empty when upload-artifact is false.
+    value: ${{ steps.artifact.outputs.artifact-id }}
+  artifact-url:
+    description: URL of the uploaded artifact, empty when upload-artifact is false.
+    value: ${{ steps.artifact.outputs.artifact-url }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 20
+
+    - name: Install dependencies
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: npm ci --omit=dev --no-audit --no-fund
+
+    - name: Export reviews
+      id: export
+      shell: bash
+      env:
+        IOS_ISSUER_ID: ${{ inputs.ios-issuer-id }}
+        IOS_KEY_ID: ${{ inputs.ios-key-id }}
+        IOS_PRIVATE_KEY: ${{ inputs.ios-private-key }}
+        IOS_APP_ID: ${{ inputs.ios-app-id }}
+        IOS_APP_NAME: ${{ inputs.ios-app-name }}
+        IOS_MAX_RESULTS: ${{ inputs.ios-max-results }}
+        ANDROID_PACKAGE_NAME: ${{ inputs.android-package-name }}
+        GOOGLE_CLIENT_EMAIL: ${{ inputs.google-client-email }}
+        GOOGLE_PRIVATE_KEY: ${{ inputs.google-private-key }}
+        ANDROID_MAX_RESULTS: ${{ inputs.android-max-results }}
+        TRANSLATION_APP_ID: ${{ inputs.translation-app-id }}
+        TRANSLATION_API_KEY: ${{ inputs.translation-api-key }}
+        OUTPUT_FILE: ${{ inputs.output-file }}
+      run: |
+        key_file="$(mktemp "$RUNNER_TEMP/ios-key-XXXXXX.p8")"
+        trap 'rm -f "$key_file"' EXIT
+        chmod 600 "$key_file"
+        printf '%s\n' "$IOS_PRIVATE_KEY" > "$key_file"
+        unset IOS_PRIVATE_KEY
+
+        case "$OUTPUT_FILE" in
+          /*) output_file="$OUTPUT_FILE" ;;
+          *) output_file="$GITHUB_WORKSPACE/$OUTPUT_FILE" ;;
+        esac
+        mkdir -p "$(dirname "$output_file")"
+
+        IOS_PRIVATE_KEY_PATH="$key_file" OUTPUT_FILE_PATH="$output_file" node "$GITHUB_ACTION_PATH/index.js"
+        echo "file-path=$output_file" >> "$GITHUB_OUTPUT"
+
+    - name: Upload artifact
+      id: artifact
+      if: inputs.upload-artifact == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ steps.export.outputs.file-path }}
+        retention-days: ${{ inputs.artifact-retention-days }}
+        if-no-files-found: error
+
+    - name: Send to destination
+      if: inputs.destination-url != ''
+      shell: bash
+      env:
+        REVIEWS_FILE: ${{ steps.export.outputs.file-path }}
+        DESTINATION_URL: ${{ inputs.destination-url }}
+        DESTINATION_METHOD: ${{ inputs.destination-method }}
+        DESTINATION_HEADERS: ${{ inputs.destination-headers }}
+        DESTINATION_FIELD: ${{ inputs.destination-field }}
+      run: node "$GITHUB_ACTION_PATH/scripts/upload.js"
